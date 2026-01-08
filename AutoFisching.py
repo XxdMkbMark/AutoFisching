@@ -1,7 +1,6 @@
 import pydirectinput, time, sys, random, colorama, mss, cv2
 import numpy as np
 from colorama import Fore, Style, just_fix_windows_console
-just_fix_windows_console()
 
 # ============== 配置区 ==============
 
@@ -22,8 +21,13 @@ upper_white = np.array([180, 50, 255])
 
 # ====================================
 
+just_fix_windows_console()
+sct = mss.mss()
+pydirectinput.PAUSE = 0 # 取消延迟
+mouse_is_down = False # 初始化flag，记录当前鼠标是否按下
+
 def log_message(type, message):
-    time=time.strftime("%H:%M:%S", time.localtime())
+    time_str=time.strftime("%H:%M:%S", time.localtime())
     if type == "INFO":
         print(f"{Fore.LIGHTGREEN_EX}[{type}]{Style.RESET_ALL} {message}")
     if type == "WARNING":
@@ -31,7 +35,7 @@ def log_message(type, message):
     if type == "ERROR":
         print(f"{Fore.RED}[{type}]{Style.RESET_ALL} {message}")
     if type == "DEBUG":
-        print(f"{Fore.CYAN}[{type} {Style.RESET_ALL}{time}{Fore.CYAN}]{Style.RESET_ALL} {message}") # 当log类型为DEBUG时，打印时间
+        print(f"{Fore.CYAN}[{type} {Style.RESET_ALL}{time_str}{Fore.CYAN}]{Style.RESET_ALL} {message}") # 当log类型为DEBUG时，打印时间
 
 def cast_rod(): # 甩杆
     pydirectinput.mouseDown()
@@ -65,7 +69,7 @@ log_message("INFO", "脚本将在 5 秒后启动, 请切换至Roblox窗口\n")
 time.sleep(5) # 等待 5 秒钟
 log_message("INFO", "脚本已启动, 在终端按Ctrl+C可停止脚本")
 
-cast_rod()
+#cast_rod()
 time.sleep(0.4)
 try:
     while True:
@@ -101,14 +105,16 @@ try:
                 if not mouse_is_down:
                     pydirectinput.mouseDown()
                     mouse_is_down = True
-                    # print("按下 ->") # 调试
+                    if debug:
+                        log_message("DEBUG", f"Fish X: {fish_x}, Bar X: {bar_x}, Diff: {diff}, Status: Mouse Down ->")
                         
             elif diff < -threshold:
                     # 鱼在左边，且超过了死区，则向左退
                 if mouse_is_down:
                     pydirectinput.mouseUp()
                     mouse_is_down = False
-                    # print("<- 松开") # 同上
+                    if debug:
+                        log_message("DEBUG", f"Fish X: {fish_x}, Bar X: {bar_x}, Diff: {diff}, Status: Mouse Up <-")
                 
             else:
                 # 鱼在死区间，则稳住白条
@@ -129,7 +135,9 @@ except KeyboardInterrupt:
     sys.exit(0)
 except Exception as e:
     if debug:
-        log_message("DEBUG", f"\n {e}")
+        log_message("ERROR", "发生未知错误, 错误信息见下")
+        log_message("DEBUG", f"{e}")
+        log_message("DEBUG", "Script exited with status code 1")
     else:
         log_message("ERROR", "发生未知错误, 请在调试模式下运行以获取更多信息")
 finally:
