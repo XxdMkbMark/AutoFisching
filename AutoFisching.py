@@ -63,55 +63,63 @@ log_message("INFO", "脚本已启动, 在终端按Ctrl+C可停止脚本")
 
 cast_rod()
 time.sleep(0.4)
-while True:
-    # 截图&转换
-    img = np.array(sct.grab(REEL_REGION))
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-    hsv = cv2.cvtColor(hsv, cv2.COLOR_BGR2HSV)
+try:
+    while True:
+        # 截图&转换
+        img = np.array(sct.grab(REEL_REGION))
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        hsv = cv2.cvtColor(hsv, cv2.COLOR_BGR2HSV)
 
-    # 创建掩模
-    mask_fish = cv2.inRange(hsv, lower_blue, upper_blue)
-    mask_bar = cv2.inRange(hsv, lower_white, upper_white)
+        # 创建掩模
+        mask_fish = cv2.inRange(hsv, lower_blue, upper_blue)
+        mask_bar = cv2.inRange(hsv, lower_white, upper_white)
 
-    # =========================
-    # 调试，只有在debug为true时才显示窗口（ToDo）
-    #cv2.imshow("Debug: Fish Mask", mask_fish)
-    #cv2.imshow("Debug: Bar Mask", mask_bar)
-    #cv2.imshow("Vision", mask_fish + mask_bar)
-    #cv2.imshow("Debug: Source", img)     # 显示原图以方便对比
-    # =========================
+        # =========================
+        # 调试，只有在debug为true时才显示窗口（ToDo）
+        #cv2.imshow("Debug: Fish Mask", mask_fish)
+        #cv2.imshow("Debug: Bar Mask", mask_bar)
+        #cv2.imshow("Vision", mask_fish + mask_bar)
+        #cv2.imshow("Debug: Source", img)     # 显示原图以方便对比
+        # =========================
 
-    # 寻找坐标与控制
-    # get_center_x
-    fish_x = get_center_x(mask_fish)
-    bar_x = get_center_x(mask_bar)
-    # 控制部分
-    if fish_x is not None and bar_x is not None:
-        diff = fish_x - bar_x
-        threshold = 15 # 死区范围 【应根据鱼竿控制力进行调整(后期移动至配置区: todo)】
-            
-            # --- 核心逻辑 ---
-        if diff > threshold: 
-                # 鱼在右边，且超过了死区，则向右追
-            if not mouse_is_down:
-                pydirectinput.mouseDown()
-                mouse_is_down = True
-                # print("按下 ->") # 调试
+        # 寻找坐标与控制
+        # get_center_x
+        fish_x = get_center_x(mask_fish)
+        bar_x = get_center_x(mask_bar)
+        # 控制部分
+        if fish_x is not None and bar_x is not None:
+            diff = fish_x - bar_x
+            threshold = 15 # 死区范围 【应根据鱼竿控制力进行调整(后期移动至配置区: todo)】
+                
+                # --- 核心逻辑 ---
+            if diff > threshold: 
+                    # 鱼在右边，且超过了死区，则向右追
+                if not mouse_is_down:
+                    pydirectinput.mouseDown()
+                    mouse_is_down = True
+                    # print("按下 ->") # 调试
+                        
+            elif diff < -threshold:
+                    # 鱼在左边，且超过了死区，则向左退
+                if mouse_is_down:
+                    pydirectinput.mouseUp()
+                    mouse_is_down = False
+                    # print("<- 松开") # 同上
+                
+            else:
+                # 鱼在死区间，则稳住白条
+                pass
                     
-        elif diff < -threshold:
-                # 鱼在左边，且超过了死区，则向左退
+        else: # 待优化！！！！！！！！！
+            # 视觉丢失 (可能小游戏还没开始，或者结束了)
+            # 安全措施：松开鼠标，防止跑路
             if mouse_is_down:
                 pydirectinput.mouseUp()
                 mouse_is_down = False
-                # print("<- 松开") # 同上
-            
-        else:
-            # 鱼在死区间，则稳住白条
-            pass
-                
-    else: # 待优化！！！！！！！！！
-        # 视觉丢失 (可能小游戏还没开始，或者结束了)
-        # 安全措施：松开鼠标，防止跑路
-        if mouse_is_down:
-            pydirectinput.mouseUp()
-            mouse_is_down = False
+except KeyboardInterrupt:
+    log_message("INFO", "脚本已停止")
+except Exception as e:
+    log_message("ERROR", f"\n {e}")
+finally:
+    cv2.destroyAllWindows()
+    pydirectinput.mouseUp() # 确保程序结束时鼠标已松开
