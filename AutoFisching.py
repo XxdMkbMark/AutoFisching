@@ -5,6 +5,9 @@ just_fix_windows_console()
 
 # ============== 配置区 ==============
 
+# 是否启用调试模式 (True/False)
+debug = True
+
 # 钓鱼区域坐标 (Top, Left, Width, Height)
 REEL_REGION = {"top": 1755, "left": 1145, "width": 1547, "height": 81}
 
@@ -19,7 +22,8 @@ upper_white = np.array([180, 50, 255])
 
 # ====================================
 
-def log_message(type, message, time=None):
+def log_message(type, message):
+    time=time.strftime("%H:%M:%S", time.localtime())
     if type == "INFO":
         print(f"{Fore.LIGHTGREEN_EX}[{type}]{Style.RESET_ALL} {message}")
     if type == "WARNING":
@@ -117,9 +121,17 @@ try:
                 pydirectinput.mouseUp()
                 mouse_is_down = False
 except KeyboardInterrupt:
-    log_message("INFO", "脚本已停止")
+    if debug:
+        log_message("INFO", "脚本已停止")
+        log_message("DEBUG", "Script exited with status code 0 (KeyboardInterrupt)")
+    else:
+        log_message("INFO", "脚本已停止")
+    sys.exit(0)
 except Exception as e:
-    log_message("ERROR", f"\n {e}")
+    if debug:
+        log_message("DEBUG", f"\n {e}")
+    else:
+        log_message("ERROR", "发生未知错误, 请在调试模式下运行以获取更多信息")
 finally:
     cv2.destroyAllWindows()
     pydirectinput.mouseUp() # 确保程序结束时鼠标已松开
