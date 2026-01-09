@@ -23,7 +23,7 @@ lower_white = np.array([0, 0, 200])
 upper_white = np.array([180, 50, 255])
 
 # 死区范围 (px) (应根据鱼竿控制力进行调整，增大可提升稳定性但会降低响应速度)
-threshold = 280
+threshold = 120
 
 # 悬浮配置 (模拟轻点达到白条悬浮效果)
 # 【除非有特殊要求，否则以下数值保持默认即可】
@@ -120,9 +120,8 @@ try:
             # 简单的等待，不需要高频检测
             if debug:
                 # 显示一下原图，方便你调试进度条区域有没有截对
-                cv2.imshow("Debug: Progress", img_progress)
+                cv2.imshow("Debug: Progress", mask_prog_white)
                 cv2.setWindowProperty("Debug: Progress", cv2.WND_PROP_TOPMOST, 1)
-                cv2.waitKey(1)
             
             time.sleep(0.1)
             continue # 跳过本次循环，不执行下面的钓鱼逻辑
@@ -132,9 +131,14 @@ try:
         fish_x = get_center_x(mask_fish)
         bar_x = get_center_x(mask_bar)
 
+        # 只要能看到白条，就时刻更新“最后已知位置”
+        if bar_x is not None:
+            last_valid_bar_x = bar_x
+
+        '''
         if debug:
             # 将所有图转为3通道
-            img_bgr = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+            img_bgr = cv2.cvtColor(img_reel, cv2.COLOR_BGRA2BGR)
             mask_fish_bgr = cv2.cvtColor(mask_fish, cv2.COLOR_GRAY2BGR)
             mask_bar_bgr = cv2.cvtColor(mask_bar, cv2.COLOR_GRAY2BGR)
             vision_bgr = cv2.cvtColor(mask_fish + mask_bar, cv2.COLOR_GRAY2BGR)
@@ -165,6 +169,7 @@ try:
             if cv2.waitKey(1) & 0xFF == ord('q'): # 按q退出
                 log_message("DEBUG", "Script exited with status code 0 (Requested by user via opencv window)")
                 break
+        '''
 
         # 控制部分
         if fish_x is not None and bar_x is not None:

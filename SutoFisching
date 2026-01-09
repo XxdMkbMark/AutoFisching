@@ -1,0 +1,53 @@
+'''
+在不创建分支的前提下, 用一个文件先改好再merge到主文件是最好的选择
+————马克·吐温
+'''
+import pydirectinput, time, sys, random, colorama, mss, cv2
+import numpy as np
+from colorama import Fore, Style, just_fix_windows_console
+
+
+REEL_REGION = {"top": 1755, "left": 1145, "width": 1547, "height": 81}
+PROGRESS_REGION = {"top": 1903, "left": 1502, "width": 835, "height": 17}
+lower_blue = np.array([100, 27, 51])
+upper_blue = np.array([120, 255, 255])
+lower_white = np.array([0, 0, 200])
+upper_white = np.array([180, 50, 255])
+
+
+
+def init(): # 此函数在脚本运行期间应只需调用一次
+    global sct, mouse_is_down
+    just_fix_windows_console()
+    sct = mss.mss()
+    pydirectinput.PAUSE = 0 # 取消延迟
+    mouse_is_down = False # 初始化flag
+
+def log_message(type, message): # 从旧版本直接copy过来的日志输出函数
+    time_str=time.strftime("%H:%M:%S", time.localtime())
+    if type == "INFO":
+        print(f"{Fore.LIGHTGREEN_EX}[{type}]{Style.RESET_ALL} {message}")
+    if type == "WARNING":
+        print(f"{Fore.LIGHTYELLOW_EX}[{type}]{Style.RESET_ALL} {message}")
+    if type == "ERROR":
+        print(f"{Fore.RED}[{type}]{Style.RESET_ALL} {message}")
+    if type == "DEBUG":
+        print(f"{Fore.CYAN}[{type} {Style.RESET_ALL}{time_str}{Fore.CYAN}]{Style.RESET_ALL} {message}") # 当log类型为DEBUG时，打印时间
+
+init()
+while True:
+    img_reel = np.array(sct.grab(REEL_REGION))
+    img_progress = np.array(sct.grab(PROGRESS_REGION))
+    hsv_reel = cv2.cvtColor(img_reel, cv2.COLOR_BGRA2BGR)
+    hsv_reel = cv2.cvtColor(hsv_reel, cv2.COLOR_BGR2HSV)
+    hsv_progress = cv2.cvtColor(img_progress, cv2.COLOR_BGRA2BGR)
+    hsv_progress = cv2.cvtColor(hsv_progress, cv2.COLOR_BGR2HSV)
+    mask_fish = cv2.inRange(hsv_reel, lower_blue, upper_blue) # 蓝鱼
+    mask_bar = cv2.inRange(hsv_reel, lower_white, upper_white) # 白条
+    mask_prog_white = cv2.inRange(hsv_progress, lower_white, upper_white) # 进度条
+
+    cv2.imshow("mask_fish", mask_fish)
+    cv2.imshow("mask_bar", mask_bar)
+    cv2.imshow("mask_prog_white", mask_prog_white)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
