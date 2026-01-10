@@ -17,11 +17,12 @@ upper_white = np.array([180, 50, 255])
 
 
 def init(): # 此函数在脚本运行期间应只需调用一次
-    global sct, mouse_is_down
+    global sct, mouse_is_down, bar_width_history
     just_fix_windows_console()
     sct = mss.mss()
     pydirectinput.PAUSE = 0 # 取消延迟
     mouse_is_down = False # 初始化flag
+    bar_width_history = [] # 用于存储白条宽度的历史记录
 
 def log_message(type, message): # 从旧版本直接copy过来的日志输出函数
     time_str=time.strftime("%H:%M:%S", time.localtime())
@@ -34,20 +35,67 @@ def log_message(type, message): # 从旧版本直接copy过来的日志输出函
     if type == "DEBUG":
         print(f"{Fore.CYAN}[{type} {Style.RESET_ALL}{time_str}{Fore.CYAN}]{Style.RESET_ALL} {message}") # 当log类型为DEBUG时，打印时间
 
+def get_contours(mask):
+    # 查找白条的轮廓
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = [cnt for cnt in contours if cv2.contourArea(cnt) > 200] # 过滤掉面积小于200的轮廓
+    if contours:
+        largest_contour = max(contours, key=cv2.contourArea)# 获取最大轮廓
+        x, y, w, h = cv2.boundingRect(largest_contour)# 获取XY长宽
+        bar_width_history.append(w)
+        if len(bar_width_history) > 10:
+            bar_width_history.pop(0)
+        # 获取白条平均宽度
+        avg_width = int(sum(bar_width_history) / len(bar_width_history))
+        return avg_width, x
+    return None, None
+    
+def get_center_x(mask): # 获取掩模中最大轮廓的中心X坐标
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        largest_fish = max(contours, key=cv2.contourArea)
+        fish_x, fish_y, fish_w, fish_h = cv2.boundingRect(largest_fish)
+        fish_center_x = fish_x + fish_w // 2
+        return fish_center_x
+    return None
+
 init()
+time.sleep(2)
 while True:
+    # 截图
     img_reel = np.array(sct.grab(REEL_REGION))
     img_progress = np.array(sct.grab(PROGRESS_REGION))
-    hsv_reel = cv2.cvtColor(img_reel, cv2.COLOR_BGRA2BGR)
+    # 转换至HSV
+    hsv_reel = cv2.cvtColor(img_reel, cv2.COLOR_BGRA2BGR) # 钓鱼条
     hsv_reel = cv2.cvtColor(hsv_reel, cv2.COLOR_BGR2HSV)
-    hsv_progress = cv2.cvtColor(img_progress, cv2.COLOR_BGRA2BGR)
+    hsv_progress = cv2.cvtColor(img_progress, cv2.COLOR_BGRA2BGR) # 进度条
     hsv_progress = cv2.cvtColor(hsv_progress, cv2.COLOR_BGR2HSV)
+    # 生成掩模
     mask_fish = cv2.inRange(hsv_reel, lower_blue, upper_blue) # 蓝鱼
     mask_bar = cv2.inRange(hsv_reel, lower_white, upper_white) # 白条
     mask_prog_white = cv2.inRange(hsv_progress, lower_white, upper_white) # 进度条
 
-    cv2.imshow("mask_fish", mask_fish)
+    combined_mask = cv2.bitwise_or(mask_bar, mask_fish) # 合并白条和蓝鱼
+    # 形态学处理掩模，去除噪点并填补空洞
+    kernel = np.ones((3, 3), np.uint8)
+    combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
+    combined_mask = cv2.erode(combined_mask, kernel, iterations=1)
+
+    bar_width, bar_x = get_contours(combined_mask)
+    fish_x = get_center_x(mask_fish)
+    if fish_x and bar_width:
+        relative_pos = (fish_x - bar_x) / bar_width
+        log_message("DEBUG", f"鱼X={fish_x}, 白条宽={bar_width}, 相对位置={relative_pos:.2f}")
+
+    cv2.imshow("mask_combined", combined_mask)
     cv2.imshow("mask_bar", mask_bar)
     cv2.imshow("mask_prog_white", mask_prog_white)
+    cv2.setWindowProperty("mask_combined", cv2.WND_PROP_TOPMOST, 1)
+    cv2.setWindowProperty("mask_bar", cv2.WND_PROP_TOPMOST, 2)
+    cv2.setWindowProperty("mask_prog_white", cv2.WND_PROP_TOPMOST, 3)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+
+
+
+    time.sleep(0.01) # 降低CPU占用
