@@ -23,7 +23,7 @@ lower_white = np.array([0, 0, 200])
 upper_white = np.array([180, 50, 255])
 
 # 死区范围 (px) (应根据鱼竿控制力进行调整，增大可提升稳定性但会降低响应速度)
-threshold = 120
+threshold = 280
 
 # 悬浮配置 (模拟轻点达到白条悬浮效果)
 # 【除非有特殊要求，否则以下数值保持默认即可】
@@ -38,9 +38,6 @@ just_fix_windows_console()
 sct = mss.mss()
 pydirectinput.PAUSE = 0 # 取消延迟
 mouse_is_down = False # 初始化flag
-# 全局变量：记录白条最后一次出现的中心点 (用于盲操救援)
-# 默认设为区域中心，防止刚启动时报错
-last_valid_bar_x = REEL_REGION["width"] // 2 
 
 def log_message(type, message):
     time_str=time.strftime("%H:%M:%S", time.localtime())
@@ -71,11 +68,6 @@ def get_center_x(mask): # 获取掩模中最大轮廓的中心X坐标
         return x + w // 2
     return None
 
-def check_game_active(mask_progress):
-    # 统计进度条区域的白色像素数量
-    # 如果白色像素超过一定数量 (比如 50 个)，认为进度条出现了
-    return cv2.countNonZero(mask_progress) > 50
-
 log_message("INFO", "AutoFisching v1.2")
 log_message("INFO", "Made by XxdMkbMark")
 log_message("WARNING", "免责声明: 使用本脚本\033[1m可能\033[0m违反Roblox的使用条款及服务协议, 对于使用本脚本所可能导致和造成的任何后果及伤害, 本人\033[1m概不负责\033[0m\n")
@@ -93,52 +85,17 @@ log_message("INFO", "脚本已启动, 在终端按Ctrl+C可停止脚本")
 try:
     while True:
         # 截图&转换
-        img_reel = np.array(sct.grab(REEL_REGION))
-        img_progress = np.array(sct.grab(PROGRESS_REGION))
-        # 钓鱼条
-        hsv_reel = cv2.cvtColor(img_reel, cv2.COLOR_BGRA2BGR)
-        hsv_reel = cv2.cvtColor(hsv_reel, cv2.COLOR_BGR2HSV)
-        # 进度条
-        hsv_progress = cv2.cvtColor(img_progress, cv2.COLOR_BGRA2BGR)
-        hsv_progress = cv2.cvtColor(hsv_progress, cv2.COLOR_BGR2HSV)
+        img = np.array(sct.grab(REEL_REGION))
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        hsv = cv2.cvtColor(hsv, cv2.COLOR_BGR2HSV)
 
         # 创建掩模
-        mask_fish = cv2.inRange(hsv_reel, lower_blue, upper_blue) # 蓝鱼
-        mask_bar = cv2.inRange(hsv_reel, lower_white, upper_white) # 白条
-        mask_prog_white = cv2.inRange(hsv_progress, lower_white, upper_white) # 进度条
+        mask_fish = cv2.inRange(hsv, lower_blue, upper_blue)
+        mask_bar = cv2.inRange(hsv, lower_white, upper_white)
 
-        # 判断游戏状态
-        is_game_running = check_game_active(mask_prog_white)
-
-        if not is_game_running:
-            # 游戏没开始，或者已经结束
-            if mouse_is_down:
-                pydirectinput.mouseUp()
-                mouse_is_down = False
-                log_message("INFO", "进度条消失 - 游戏结束或等待中")
-            
-            # 简单的等待，不需要高频检测
-            if debug:
-                # 显示一下原图，方便你调试进度条区域有没有截对
-                cv2.imshow("Debug: Progress", mask_prog_white)
-                cv2.setWindowProperty("Debug: Progress", cv2.WND_PROP_TOPMOST, 1)
-            
-            time.sleep(0.1)
-            continue # 跳过本次循环，不执行下面的钓鱼逻辑
-
-        # 寻找坐标与控制
-        # get_center_x
-        fish_x = get_center_x(mask_fish)
-        bar_x = get_center_x(mask_bar)
-
-        # 只要能看到白条，就时刻更新“最后已知位置”
-        if bar_x is not None:
-            last_valid_bar_x = bar_x
-
-        '''
         if debug:
             # 将所有图转为3通道
-            img_bgr = cv2.cvtColor(img_reel, cv2.COLOR_BGRA2BGR)
+            img_bgr = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
             mask_fish_bgr = cv2.cvtColor(mask_fish, cv2.COLOR_GRAY2BGR)
             mask_bar_bgr = cv2.cvtColor(mask_bar, cv2.COLOR_GRAY2BGR)
             vision_bgr = cv2.cvtColor(mask_fish + mask_bar, cv2.COLOR_GRAY2BGR)
@@ -169,8 +126,11 @@ try:
             if cv2.waitKey(1) & 0xFF == ord('q'): # 按q退出
                 log_message("DEBUG", "Script exited with status code 0 (Requested by user via opencv window)")
                 break
-        '''
 
+        # 寻找坐标与控制
+        # get_center_x
+        fish_x = get_center_x(mask_fish)
+        bar_x = get_center_x(mask_bar)
         # 控制部分
         if fish_x is not None and bar_x is not None:
             diff = fish_x - bar_x
@@ -209,31 +169,11 @@ try:
                 # 如果这个时间太短，白条会慢慢上升；太长，白条会慢慢下降
                 time.sleep(hover_interval) 
 
-            elif fish_x is not None and bar_x is None:
-            # === 情况 B: 只有鱼，没有白条 (白条变色了！) ===
-            # 这就是你最开始遇到的问题。
-            # 现在因为外层有 is_game_running 保护，我们确信游戏还没结束。
-            
-                center_screen = REEL_REGION["width"] // 2
-                
-                # 使用“最后已知位置”进行盲操
-                if last_valid_bar_x > center_screen:
-                    # 记忆中白条在右边 -> 说明它冲太高变色了 -> 松开
-                    if mouse_is_down:
-                        pydirectinput.mouseUp()
-                        mouse_is_down = False
-                    if debug: print(f"\r{Fore.RED}[RESCUE] 丢失白条! 记忆位置靠右 -> 松开等待下落{Style.RESET_ALL}", end="")
-                
-                else:
-                    # 记忆中白条在左边 -> 说明它掉太底变色了 -> 按住
-                    if not mouse_is_down:
-                        pydirectinput.mouseDown()
-                        mouse_is_down = True
-                    if debug: print(f"\r{Fore.RED}[RESCUE] 丢失白条! 记忆位置靠左 -> 按住紧急拉升{Style.RESET_ALL}", end="")
-
         else:
-            # 情况 C: 啥都看不见 (可能 UI 闪烁)
-            pass
+            # 视觉丢失保护
+            if mouse_is_down:
+                pydirectinput.mouseUp()
+                mouse_is_down = False
 
         time.sleep(0.001) # 降低CPU占用率
 
