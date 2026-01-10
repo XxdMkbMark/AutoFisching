@@ -4,42 +4,40 @@ from colorama import Fore, Style, just_fix_windows_console
 
 # ============== 配置区 ==============
 
-# 是否启用调试模式 (True/False)
-debug = True
+# 调试模式 (True/False)
+debug = False
 
 # 钓鱼区域坐标 (Y, X, 长, 宽)
 REEL_REGION = {"top": 1755, "left": 1145, "width": 1547, "height": 81}
-
 # 进度条区域坐标 (Y, X, 长, 宽)
 PROGRESS_REGION = {"top": 1903, "left": 1502, "width": 835, "height": 17}
 
 # 鱼漂颜色范围 (Lower, Upper)
 # 【一般来讲无需调整，如遇到无法识别鱼漂或白条再进行调整，下同】
-lower_blue = np.array([100, 27, 51])
-upper_blue = np.array([120, 255, 255])
-
+lower_blue = np.array([110, 67, 91])
+upper_blue = np.array([110, 255, 255])
 # 白条颜色范围 (Lower, Upper)
 lower_white = np.array([0, 0, 200])
 upper_white = np.array([180, 50, 255])
 
-# 死区范围 (px) (应根据鱼竿控制力进行调整，增大可提升稳定性但会降低响应速度)
-threshold = 280
-
 # 悬浮配置 (模拟轻点达到白条悬浮效果)
-# 【除非有特殊要求，否则以下数值保持默认即可】
+# 【除非有特殊需求，否则以下数值保持默认即可】
 # 点按持续时间 (秒): 
-hover_click_duration = 0.09
+hover_click_duration = 0.08
 # 两次点按之间的冷却时间 (秒): 
-hover_interval = 0.08 
+hover_interval = 0.01
 
 # ====================================
 
-just_fix_windows_console()
-sct = mss.mss()
-pydirectinput.PAUSE = 0 # 取消延迟
-mouse_is_down = False # 初始化flag
+def init(): # 此函数在脚本运行期间应只需调用一次
+    global sct, mouse_is_down, bar_width_history
+    just_fix_windows_console()
+    sct = mss.mss()
+    pydirectinput.PAUSE = 0 # 取消延迟
+    mouse_is_down = False # 初始化flag
+    bar_width_history = [] # 用于存储白条宽度的历史记录
 
-def log_message(type, message):
+def log_message(type, message): # 从旧版本直接copy过来的日志输出函数
     time_str=time.strftime("%H:%M:%S", time.localtime())
     if type == "INFO":
         print(f"{Fore.LIGHTGREEN_EX}[{type}]{Style.RESET_ALL} {message}")
@@ -50,137 +48,114 @@ def log_message(type, message):
     if type == "DEBUG":
         print(f"{Fore.CYAN}[{type} {Style.RESET_ALL}{time_str}{Fore.CYAN}]{Style.RESET_ALL} {message}") # 当log类型为DEBUG时，打印时间
 
+def get_contours(mask):
+    # 查找白条的轮廓
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = [cnt for cnt in contours if cv2.contourArea(cnt) > 200] # 过滤掉面积小于200的轮廓
+    if contours:
+        largest_contour = max(contours, key=cv2.contourArea)# 获取最大轮廓
+        x, y, w, h = cv2.boundingRect(largest_contour)# 获取XY长宽
+        bar_width_history.append(w)
+        if len(bar_width_history) > 10:
+            bar_width_history.pop(0)
+        # 获取白条平均宽度
+        avg_width = int(sum(bar_width_history) / len(bar_width_history))
+        return avg_width, x
+    return None, None
+    
+def get_center_x(mask): # 获取掩模中最大轮廓的中心X坐标
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        largest_fish = max(contours, key=cv2.contourArea)
+        fish_x, fish_y, fish_w, fish_h = cv2.boundingRect(largest_fish)
+        fish_center_x = fish_x + fish_w // 2
+        return fish_center_x, fish_w
+    return None, None
+
 def cast_rod(): # 甩杆
     pydirectinput.mouseDown()
     time.sleep(random.uniform(0.35, 1.40))
     pydirectinput.mouseUp()
 
-def do_shake(): # 摇晃
+def do_shake(): # 摇晃 # 暂时没啥用吧，希望不会有人测试这块
     pydirectinput.press('enter')
 
-def get_center_x(mask): # 获取掩模中最大轮廓的中心X坐标
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if contours:
-        largest_contour = max(contours, key=cv2.contourArea)
-        if cv2.contourArea(largest_contour) < 20:
-            return None
-        x, y, w, h = cv2.boundingRect(largest_contour)
-        return x + w // 2
-    return None
-
-log_message("INFO", "AutoFisching v1.2")
+init() # 初始化
+log_message("INFO", "AutoFisching v1.4")
 log_message("INFO", "Made by XxdMkbMark")
 log_message("WARNING", "免责声明: 使用本脚本\033[1m可能\033[0m违反Roblox的使用条款及服务协议, 对于使用本脚本所可能导致和造成的任何后果及伤害, 本人\033[1m概不负责\033[0m\n")
 time.sleep(0.3)
 log_message("WARNING", "准备事项:")
 log_message("WARNING", "1.请确保UI导航模式开启并已将选择框选择至SHAKE按钮")
-log_message("WARNING", "2.请确保已在Roblox设置中将图形画质调至最低")
-log_message("WARNING", "3.请确保在Fisch的Menu中开启了Preformance Mode选项并关闭了Higher Brightness和Higher Saturarion选项 (重要! 不按照说明操作可能导致图像识别不准确进而导致脱钩!)")
+log_message("WARNING", "2.请确保已在Fisch Menu中开启了Preformance Mode并关闭了Higher Brightness和Higher Saturarion选项 (重要!)")
 log_message("WARNING", "完成所有准备工作后按下Enter继续")
-input()  # 等待用户按下 Enter 键继续
+input()  # 等待按下Enter键
 log_message("INFO", "脚本将在 5 秒后启动, 请切换至Roblox窗口\n")
-time.sleep(5) # 等待 5 秒钟
+time.sleep(5)
 log_message("INFO", "脚本已启动, 在终端按Ctrl+C可停止脚本")
 
 try:
     while True:
-        # 截图&转换
-        img = np.array(sct.grab(REEL_REGION))
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-        hsv = cv2.cvtColor(hsv, cv2.COLOR_BGR2HSV)
+        # 截图
+        img_reel = np.array(sct.grab(REEL_REGION))
+        img_progress = np.array(sct.grab(PROGRESS_REGION))
+        # 转换至HSV
+        hsv_reel = cv2.cvtColor(img_reel, cv2.COLOR_BGRA2BGR) # 钓鱼条
+        hsv_reel = cv2.cvtColor(hsv_reel, cv2.COLOR_BGR2HSV)
+        hsv_progress = cv2.cvtColor(img_progress, cv2.COLOR_BGRA2BGR) # 进度条
+        hsv_progress = cv2.cvtColor(hsv_progress, cv2.COLOR_BGR2HSV)
+        # 生成掩模
+        mask_fish = cv2.inRange(hsv_reel, lower_blue, upper_blue) # 蓝鱼
+        mask_bar = cv2.inRange(hsv_reel, lower_white, upper_white) # 白条
+        mask_prog_white = cv2.inRange(hsv_progress, lower_white, upper_white) # 进度条
 
-        # 创建掩模
-        mask_fish = cv2.inRange(hsv, lower_blue, upper_blue)
-        mask_bar = cv2.inRange(hsv, lower_white, upper_white)
+        combined_mask = cv2.bitwise_or(mask_bar, mask_fish) # 合并白条和蓝鱼
+        # 形态学处理掩模，去除噪点并填补空洞
+        kernel = np.ones((3, 3), np.uint8)
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
+        combined_mask = cv2.erode(combined_mask, kernel, iterations=1)
+
+        bar_width, bar_x = get_contours(combined_mask)
+        fish_x, fish_w = get_center_x(mask_fish)
+        if fish_x != None and bar_width != None and bar_x != None:
+            if fish_w < 30: # 鱼宽度过大，说明识别到的不是鱼   
+                relative_pos = (fish_x - bar_x) / bar_width
+                #log_message("DEBUG", f"鱼X={fish_x}, 白条宽={bar_width}, 相对位置={relative_pos:.2f}")
+                if relative_pos <= 0.3: # 鱼在白条左侧，向左移动
+                    if mouse_is_down:
+                        pydirectinput.mouseUp()
+                        mouse_is_down = False
+                elif relative_pos >= 0.7: # 鱼在白条右侧，向右移动
+                    if not mouse_is_down:
+                        pydirectinput.mouseDown()
+                        mouse_is_down = True
+                elif 0.3 < relative_pos < 0.7: # 鱼在白条中间，悬浮
+                    if mouse_is_down:
+                        pydirectinput.mouseUp()
+                        mouse_is_down = False
+                    pydirectinput.mouseDown()
+                    time.sleep(hover_click_duration) # 按压
+                    pydirectinput.mouseUp()
+                    time.sleep(hover_interval) # 等待
 
         if debug:
-            # 将所有图转为3通道
-            img_bgr = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-            mask_fish_bgr = cv2.cvtColor(mask_fish, cv2.COLOR_GRAY2BGR)
-            mask_bar_bgr = cv2.cvtColor(mask_bar, cv2.COLOR_GRAY2BGR)
-            vision_bgr = cv2.cvtColor(mask_fish + mask_bar, cv2.COLOR_GRAY2BGR)
-            
-            # 调整大小以便拼接 
-            scale = 0.6 # 缩放比例
-            h, w = img_bgr.shape[:2]
-            new_size = (int(w * scale), int(h * scale))
-            
-            img_s = cv2.resize(img_bgr, new_size)
-            fish_s = cv2.resize(mask_fish_bgr, new_size)
-            bar_s = cv2.resize(mask_bar_bgr, new_size)
-            vision_s = cv2.resize(vision_bgr, new_size)
-
-            # 拼接图片
-            # 原图&视觉
-            top_row = cv2.hconcat([img_s, vision_s])
-            # 鱼掩膜&白条掩膜
-            bottom_row = cv2.hconcat([fish_s, bar_s])
-            # 合并
-            final_debug = cv2.vconcat([top_row, bottom_row])
-
-            # 显示&置顶
-            window_name = "AutoFisch Debug View"
-            cv2.imshow(window_name, final_debug)
-            cv2.setWindowProperty(window_name, cv2.WND_PROP_TOPMOST, 1)
-
-            if cv2.waitKey(1) & 0xFF == ord('q'): # 按q退出
-                log_message("DEBUG", "Script exited with status code 0 (Requested by user via opencv window)")
+            cv2.imshow("mask_combined", combined_mask)
+            cv2.imshow("mask_bar", mask_bar)
+            cv2.imshow("mask_prog_white", mask_prog_white)
+            cv2.setWindowProperty("mask_combined", cv2.WND_PROP_TOPMOST, 1)
+            cv2.setWindowProperty("mask_bar", cv2.WND_PROP_TOPMOST, 2)
+            cv2.setWindowProperty("mask_prog_white", cv2.WND_PROP_TOPMOST, 3)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-        # 寻找坐标与控制
-        # get_center_x
-        fish_x = get_center_x(mask_fish)
-        bar_x = get_center_x(mask_bar)
-        # 控制部分
-        if fish_x is not None and bar_x is not None:
-            diff = fish_x - bar_x
+    
 
-            # 鱼在白条右侧，向右追
-            if diff > threshold: 
-                if not mouse_is_down:
-                    pydirectinput.mouseDown()
-                    mouse_is_down = True
-                    if debug: log_message("DEBUG", f"向右 -> (Diff: {diff})")
-            
-            # 鱼在白条左侧，向左退
-            elif diff < -threshold:
-                if mouse_is_down:
-                    pydirectinput.mouseUp()
-                    mouse_is_down = False
-                    if debug: log_message("DEBUG", f"向左 <- (Diff: {diff})")
-            
-            # 鱼在死区内，需要白条悬浮
-            elif diff >= -threshold and diff <= threshold:
-                # 松开鼠标防止冲突
-                if mouse_is_down:
-                    pydirectinput.mouseUp()
-                    mouse_is_down = False
-
-                if debug:
-                    log_message("DEBUG", f"悬浮中... Diff: {diff}")
-                
-                # 执行一次快速点按 (Tap)
-                # 这种操作可以让白条获得一点点向上的力，对抗重力，从而实现"悬浮"
-                pydirectinput.mouseDown()
-                time.sleep(hover_click_duration) # 极短的按压
-                pydirectinput.mouseUp()
-                
-                # 这里的 sleep 很关键，决定了悬浮的力度
-                # 如果这个时间太短，白条会慢慢上升；太长，白条会慢慢下降
-                time.sleep(hover_interval) 
-
-        else:
-            # 视觉丢失保护
-            if mouse_is_down:
-                pydirectinput.mouseUp()
-                mouse_is_down = False
-
-        time.sleep(0.001) # 降低CPU占用率
+    time.sleep(0.01) # 降低CPU占用
 
 except KeyboardInterrupt:
     if debug:
         log_message("INFO", "脚本已停止")
-        log_message("DEBUG", "Script exited with status code 0 (KeyboardInterrupt)")
+        log_message("DEBUG", "Script exited with status code 0")
     else:
         log_message("INFO", "脚本已停止")
     sys.exit(0)
