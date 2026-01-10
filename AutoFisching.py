@@ -19,6 +19,16 @@ upper_blue = np.array([110, 255, 255])
 # 白条颜色范围 (Lower, Upper)
 lower_white = np.array([0, 0, 200])
 upper_white = np.array([180, 50, 255])
+# 白条(红)颜色范围 (Lower, Upper)
+# 区间A (0-10)
+lower_red1 = np.array([0, 60, 60]) # S和V设为60以适应半透明
+upper_red1 = np.array([10, 255, 255])
+# 区间B (170-180)
+lower_red2 = np.array([170, 60, 60])
+upper_red2 = np.array([180, 255, 255])
+# 白条(绿)颜色范围 (Lower, Upper)
+lower_green = np.array([35, 60, 60])
+upper_green = np.array([85, 255, 255])
 
 # 悬浮配置 (模拟轻点达到白条悬浮效果)
 # 【除非有特殊需求，否则以下数值保持默认即可】
@@ -107,6 +117,9 @@ try:
         # 生成掩模
         mask_fish = cv2.inRange(hsv_reel, lower_blue, upper_blue) # 蓝鱼
         mask_bar = cv2.inRange(hsv_reel, lower_white, upper_white) # 白条
+        mask_red_zone1 = cv2.inRange(hsv_reel, lower_red1, upper_red1) # 红条
+        mask_red_zone2 = cv2.inRange(hsv_reel, lower_red2, upper_red2) # 红条
+        mask_green_zone = cv2.inRange(hsv_reel, lower_green, upper_green) # 绿条
         mask_prog_white = cv2.inRange(hsv_progress, lower_white, upper_white) # 进度条
 
         combined_mask = cv2.bitwise_or(mask_bar, mask_fish) # 合并白条和蓝鱼
