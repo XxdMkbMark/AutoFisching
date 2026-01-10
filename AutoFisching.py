@@ -117,9 +117,6 @@ try:
         # 生成掩模
         mask_fish = cv2.inRange(hsv_reel, lower_blue, upper_blue) # 蓝鱼
         mask_bar = cv2.inRange(hsv_reel, lower_white, upper_white) # 白条
-        mask_red_zone1 = cv2.inRange(hsv_reel, lower_red1, upper_red1) # 红条
-        mask_red_zone2 = cv2.inRange(hsv_reel, lower_red2, upper_red2) # 红条
-        mask_green_zone = cv2.inRange(hsv_reel, lower_green, upper_green) # 绿条
         mask_prog_white = cv2.inRange(hsv_progress, lower_white, upper_white) # 进度条
 
         combined_mask = cv2.bitwise_or(mask_bar, mask_fish) # 合并白条和蓝鱼
