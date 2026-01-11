@@ -21,8 +21,6 @@ lower_blue = np.array([110, 67, 91])
 upper_blue = np.array([110, 255, 255])
 lower_white = np.array([0, 0, 200])
 upper_white = np.array([180, 50, 255])
-lower_tension_generic = np.array([0, 43, 46]) 
-upper_tension_generic = np.array([180, 255, 255])
 
 
 
@@ -48,7 +46,7 @@ def log_message(type, message): # 从旧版本直接copy过来的日志输出函
 def get_contours(mask):
     # 查找白条的轮廓
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours = [cnt for cnt in contours if cv2.contourArea(cnt) > 200] # 过滤掉面积小于200的轮廓
+    contours = [cnt for cnt in contours if cv2.contourArea(cnt) > 250] # 过滤掉面积小于250的轮廓
     if contours:
         largest_contour = max(contours, key=cv2.contourArea)# 获取最大轮廓
         x, y, w, h = cv2.boundingRect(largest_contour)# 获取XY长宽
@@ -76,6 +74,7 @@ def cast_rod(): # 甩杆
 
 init()
 time.sleep(2)
+cast_rod()
 while True:
     # 截图
     img_reel = np.array(sct.grab(REEL_REGION))
@@ -88,11 +87,12 @@ while True:
     # 生成掩模
     mask_fish = cv2.inRange(hsv_reel, lower_blue, upper_blue) # 蓝鱼
     mask_bar = cv2.inRange(hsv_reel, lower_white, upper_white) # 白条
-    mask_red_zone1 = cv2.inRange(hsv_reel, lower_red1, upper_red1) # 红条
-    mask_red_zone2 = cv2.inRange(hsv_reel, lower_red2, upper_red2) # 红条
-    mask_green_zone = cv2.inRange(hsv_reel, lower_green, upper_green) # 绿条
     mask_prog_white = cv2.inRange(hsv_progress, lower_white, upper_white) # 进度条
-    mask_bar_color = cv2.inRange(hsv_reel, lower_bar_color, upper_bar_color) # 红-橙-绿范围
+
+    white_pixels = cv2.countNonZero(mask_prog_white) # 计算进度条中白色像素的数量
+    total_pixels = PROGRESS_REGION["width"] * PROGRESS_REGION["height"] # 计算进度条的总像素数量
+    progress_ratio = white_pixels / total_pixels # 计算进度条的比例
+    log_message("DEBUG", f"钓鱼进度: {progress_ratio}")
 
     combined_mask = cv2.bitwise_or(mask_bar, mask_fish) # 合并白条和蓝鱼
     
@@ -100,32 +100,32 @@ while True:
     kernel = np.ones((3, 3), np.uint8)
     combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
     combined_mask = cv2.erode(combined_mask, kernel, iterations=1)
-    
 
-    mask_bar_all = combined_mask | mask_bar_color
-
-    bar_width, bar_x = get_contours(mask_bar_all)
+    bar_width, bar_x = get_contours(combined_mask)
     fish_x, fish_w = get_center_x(mask_fish)
-    if fish_x != None and bar_width != None and bar_x != None:
-        if fish_w < 30: # 鱼宽度过大，说明识别到的不是鱼   
-            relative_pos = (fish_x - bar_x) / bar_width
-            #log_message("DEBUG", f"鱼X={fish_x}, 白条宽={bar_width}, 相对位置={relative_pos:.2f}")
-            if relative_pos <= 0.3: # 鱼在白条左侧，向左移动
-                if mouse_is_down:
-                    pydirectinput.mouseUp()
-                    mouse_is_down = False
-            elif relative_pos >= 0.7: # 鱼在白条右侧，向右移动
-                if not mouse_is_down:
+    if progress_ratio < 0.98 and progress_ratio >= 0.085: # 已开始钓鱼且进度条未满
+        if fish_x != None and bar_width != None and bar_x != None: # 确保非误识别
+            if fish_w < 30: # 鱼宽度过大，说明识别到的不是鱼   
+                relative_pos = (fish_x - bar_x) / bar_width
+                #log_message("DEBUG", f"鱼X={fish_x}, 白条宽={bar_width}, 相对位置={relative_pos:.2f}")
+                if relative_pos <= 0.3: # 鱼在白条左侧，向左移动
+                    if mouse_is_down:
+                        pydirectinput.mouseUp()
+                        mouse_is_down = False
+                elif relative_pos >= 0.7: # 鱼在白条右侧，向右移动
+                    if not mouse_is_down:
+                        pydirectinput.mouseDown()
+                        mouse_is_down = True
+                elif 0.3 < relative_pos < 0.7: # 鱼在白条中间，悬浮
+                    if mouse_is_down:
+                        pydirectinput.mouseUp()
+                        mouse_is_down = False
                     pydirectinput.mouseDown()
-                    mouse_is_down = True
-            elif 0.3 < relative_pos < 0.7: # 鱼在白条中间，悬浮
-                if mouse_is_down:
+                    time.sleep(0.08)
                     pydirectinput.mouseUp()
-                    mouse_is_down = False
-                pydirectinput.mouseDown()
-                time.sleep(0.08)
-                pydirectinput.mouseUp()
-                time.sleep(0.01)
+                    time.sleep(0.01)
+    elif progress_ratio < 0.085:
+        cast_rod()
 
     cv2.imshow("mask_combined", combined_mask)
     cv2.imshow("mask_bar", mask_bar)
