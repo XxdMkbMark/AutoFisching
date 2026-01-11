@@ -92,7 +92,7 @@ while True:
     white_pixels = cv2.countNonZero(mask_prog_white) # 计算进度条中白色像素的数量
     total_pixels = PROGRESS_REGION["width"] * PROGRESS_REGION["height"] # 计算进度条的总像素数量
     progress_ratio = white_pixels / total_pixels # 计算进度条的比例
-    log_message("DEBUG", f"钓鱼进度: {progress_ratio}")
+    #log_message("DEBUG", f"钓鱼进度: {progress_ratio}")
 
     combined_mask = cv2.bitwise_or(mask_bar, mask_fish) # 合并白条和蓝鱼
     

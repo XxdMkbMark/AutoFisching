@@ -19,16 +19,6 @@ upper_blue = np.array([110, 255, 255])
 # 白条颜色范围 (Lower, Upper)
 lower_white = np.array([0, 0, 200])
 upper_white = np.array([180, 50, 255])
-# 白条(红)颜色范围 (Lower, Upper)
-# 区间A (0-10)
-lower_red1 = np.array([0, 60, 60]) # S和V设为60以适应半透明
-upper_red1 = np.array([10, 255, 255])
-# 区间B (170-180)
-lower_red2 = np.array([170, 60, 60])
-upper_red2 = np.array([180, 255, 255])
-# 白条(绿)颜色范围 (Lower, Upper)
-lower_green = np.array([35, 60, 60])
-upper_green = np.array([85, 255, 255])
 
 # 悬浮配置 (模拟轻点达到白条悬浮效果)
 # 【除非有特殊需求，否则以下数值保持默认即可】
@@ -40,12 +30,13 @@ hover_interval = 0.01
 # ====================================
 
 def init(): # 此函数在脚本运行期间应只需调用一次
-    global sct, mouse_is_down, bar_width_history
+    global sct, mouse_is_down, bar_width_history, counter
     just_fix_windows_console()
     sct = mss.mss()
     pydirectinput.PAUSE = 0 # 取消延迟
     mouse_is_down = False # 初始化flag
     bar_width_history = [] # 用于存储白条宽度的历史记录
+    counter = 0 # 甩杆次数
 
 def log_message(type, message): # 从旧版本直接copy过来的日志输出函数
     time_str=time.strftime("%H:%M:%S", time.localtime())
@@ -91,7 +82,7 @@ def do_shake(): # 摇晃 # 暂时没啥用吧，希望不会有人测试这块
     pydirectinput.press('enter')
 
 init() # 初始化
-log_message("INFO", "AutoFisching v1.4")
+log_message("INFO", "AutoFisching v1.5")
 log_message("INFO", "Made by XxdMkbMark")
 log_message("WARNING", "免责声明: 使用本脚本\033[1m可能\033[0m违反Roblox的使用条款及服务协议, 对于使用本脚本所可能导致和造成的任何后果及伤害, 本人\033[1m概不负责\033[0m\n")
 time.sleep(0.3)
@@ -103,6 +94,8 @@ input()  # 等待按下Enter键
 log_message("INFO", "脚本将在 5 秒后启动, 请切换至Roblox窗口\n")
 time.sleep(5)
 log_message("INFO", "脚本已启动, 在终端按Ctrl+C可停止脚本")
+cast_rod()
+counter += 1
 
 try:
     while True:
@@ -119,6 +112,10 @@ try:
         mask_bar = cv2.inRange(hsv_reel, lower_white, upper_white) # 白条
         mask_prog_white = cv2.inRange(hsv_progress, lower_white, upper_white) # 进度条
 
+        white_pixels = cv2.countNonZero(mask_prog_white) # 计算进度条中白色像素的数量
+        total_pixels = PROGRESS_REGION["width"] * PROGRESS_REGION["height"] # 计算进度条的总像素数量
+        progress_ratio = white_pixels / total_pixels # 计算进度条的比例
+
         combined_mask = cv2.bitwise_or(mask_bar, mask_fish) # 合并白条和蓝鱼
         # 形态学处理掩模，去除噪点并填补空洞
         kernel = np.ones((3, 3), np.uint8)
@@ -127,26 +124,32 @@ try:
 
         bar_width, bar_x = get_contours(combined_mask)
         fish_x, fish_w = get_center_x(mask_fish)
-        if fish_x != None and bar_width != None and bar_x != None:
-            if fish_w < 30: # 鱼宽度过大，说明识别到的不是鱼   
-                relative_pos = (fish_x - bar_x) / bar_width
-                #log_message("DEBUG", f"鱼X={fish_x}, 白条宽={bar_width}, 相对位置={relative_pos:.2f}")
-                if relative_pos <= 0.3: # 鱼在白条左侧，向左移动
-                    if mouse_is_down:
-                        pydirectinput.mouseUp()
-                        mouse_is_down = False
-                elif relative_pos >= 0.7: # 鱼在白条右侧，向右移动
-                    if not mouse_is_down:
+        if progress_ratio < 0.98 and progress_ratio >= 0.085: # 已开始钓鱼且进度条未满
+            if fish_x != None and bar_width != None and bar_x != None: # 确保非误识别
+                if fish_w < 30: # 鱼宽度过大，说明识别到的不是鱼   
+                    relative_pos = (fish_x - bar_x) / bar_width
+                    if debug:
+                        log_message("DEBUG", f"鱼X={fish_x}, 白条宽={bar_width}, 相对位置={relative_pos:.2f}, 钓鱼进度: {progress_ratio}")
+                    if relative_pos <= 0.3: # 鱼在白条左侧，向左移动
+                        if mouse_is_down:
+                            pydirectinput.mouseUp()
+                            mouse_is_down = False
+                    elif relative_pos >= 0.7: # 鱼在白条右侧，向右移动
+                        if not mouse_is_down:
+                            pydirectinput.mouseDown()
+                            mouse_is_down = True
+                    elif 0.3 < relative_pos < 0.7: # 鱼在白条中间，悬浮
+                        if mouse_is_down:
+                            pydirectinput.mouseUp()
+                            mouse_is_down = False
                         pydirectinput.mouseDown()
-                        mouse_is_down = True
-                elif 0.3 < relative_pos < 0.7: # 鱼在白条中间，悬浮
-                    if mouse_is_down:
+                        time.sleep(0.08)
                         pydirectinput.mouseUp()
-                        mouse_is_down = False
-                    pydirectinput.mouseDown()
-                    time.sleep(hover_click_duration) # 按压
-                    pydirectinput.mouseUp()
-                    time.sleep(hover_interval) # 等待
+                        time.sleep(0.01)
+        elif progress_ratio < 0.085:
+            cast_rod()
+            log_message("INFO", f"已甩杆 {counter} 次")
+            counter += 1
 
         if debug:
             cv2.imshow("mask_combined", combined_mask)
@@ -173,6 +176,7 @@ except Exception as e:
     if debug:
         log_message("ERROR", "发生未知错误, 错误信息见下")
         log_message("DEBUG", f"{e}")
+        log_message("DEBUG", "如果你认为这是一个bug, 请前往GitHub提交issue")
         log_message("DEBUG", "Script exited with status code 1")
     else:
         log_message("ERROR", "发生未知错误, 请在调试模式下运行以获取更多信息")
