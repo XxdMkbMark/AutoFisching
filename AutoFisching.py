@@ -78,11 +78,11 @@ def cast_rod(): # 甩杆
     time.sleep(random.uniform(0.35, 1.40))
     pydirectinput.mouseUp()
 
-def do_shake(): # 摇晃 # 暂时没啥用吧，希望不会有人测试这块
+def do_shake(): # 摇晃 # 暂时没用上，希望不会有人测试这块
     pydirectinput.press('enter')
 
 init() # 初始化
-log_message("INFO", "AutoFisching v1.5")
+log_message("INFO", "AutoFisching v1.5.1-hotfix")
 log_message("INFO", "Made by XxdMkbMark")
 log_message("WARNING", "免责声明: 使用本脚本\033[1m可能\033[0m违反Roblox的使用条款及服务协议, 对于使用本脚本所可能导致和造成的任何后果及伤害, 本人\033[1m概不负责\033[0m\n")
 time.sleep(0.3)
@@ -150,6 +150,7 @@ try:
             cast_rod()
             log_message("INFO", f"已甩杆 {counter} 次")
             counter += 1
+            time.sleep(0.5)
 
         if debug:
             cv2.imshow("mask_combined", combined_mask)
