@@ -126,7 +126,9 @@ while True:
                     time.sleep(0.01)
     elif progress_ratio < 0.085:
         cast_rod()
+        time.sleep(0.5)
 
+    '''
     cv2.imshow("mask_combined", combined_mask)
     cv2.imshow("mask_bar", mask_bar)
     cv2.imshow("mask_prog_white", mask_prog_white)
@@ -135,6 +137,7 @@ while True:
     cv2.setWindowProperty("mask_prog_white", cv2.WND_PROP_TOPMOST, 3)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+    '''
 
     
 
