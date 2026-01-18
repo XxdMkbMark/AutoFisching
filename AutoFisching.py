@@ -47,7 +47,7 @@ def log_message(type, message): # 从旧版本直接copy过来的日志输出函
     if type == "ERROR":
         print(f"{Fore.RED}[{type}]{Style.RESET_ALL} {message}")
     if type == "DEBUG":
-        print(f"{Fore.CYAN}[{type} {Style.RESET_ALL}{time_str}{Fore.CYAN}]{Style.RESET_ALL} {message}") # 当log类型为DEBUG时，打印时间
+        print(f"{Fore.CYAN}[{type} {Style.RESET_ALL}{time_str}{Fore.CYAN}]{Style.RESET_ALL} {message}") # 当log类型为DEBUG时打印时间
 
 def get_contours(mask):
     # 查找白条的轮廓
